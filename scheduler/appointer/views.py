@@ -41,6 +41,12 @@ from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
 
 
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.core.exceptions import ObjectDoesNotExist
+from django.utils import timezone
+
 def my_view(request):
     return render(request, 'index.html')
 
@@ -93,38 +99,6 @@ def signup(request):
         form = SignupForm()
 
     return render(request, 'signup.html', {'form': form})
-
-
-
-""" User = get_user_model()
-
-class UserLoginView(APIView):
-    def post(self, request):
-        serializer = UserLoginSerializer(data=request.data)
-        error_message = None
-        access_token = None
-
-        if serializer.is_valid():
-            email = serializer.validated_data['email']
-            password = serializer.validated_data['password']
-
-            try:
-                user = User.objects.get(email=email)
-            except User.DoesNotExist:
-                error_message = 'Email does not exist'
-
-            if error_message is None:
-                user = authenticate(request, username=email, password=password)
-                if user is not None:
-                    refresh = RefreshToken.for_user(user)
-                    access_token = str(refresh.access_token)
-                else:
-                    error_message = 'Invalid password'
-            else:
-                error_message = 'Invalid data'
- """ """ return render(request, 'login.html', {'error_message': error_message, 'access_token': access_token}) """
-
-
 
 
 User = get_user_model()
@@ -196,7 +170,7 @@ class PasswordResetRequestView(APIView):
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-
+# input ==> body: email
 
 
 class PasswordResetView(APIView):
@@ -224,7 +198,7 @@ class PasswordResetView(APIView):
         except PasswordReset.DoesNotExist:
             return Response({'detail': 'Invalid token'}, status=status.HTTP_400_BAD_REQUEST) 
         
-
+#input token in parameter and new_password in body
 
 
 User = get_user_model()
@@ -258,65 +232,6 @@ class ShowAppointmentsView(APIView):
 
 
 
-class CreateAppointmentView(APIView):
-    def post(self, request):
-
-        # Get the doctor_id from the query parameters
-        id = request.query_params.get('id',None)
-        user=User.objects.get(id=id)
-        user_appoint=Appointment.objects.filter(doctor_id=id).exists
-        email=user.email
-        user_login=loginmodel.objects.filter(email=email).exists
-        print(user_login)
-        try:
-            # Validate and retrieve the doctor based on the provided doctor_id
-            doctor = User.objects.get(id=id, account_type='Doctor')
-        except User.DoesNotExist:
-            # Return a 404 response if the doctor does not exist
-            return Response({'detail': 'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
-
-
-
-        if(user.account_type != 'Doctor' and user_login.isverified != True):
-            return Response({'detail': 'Only logged-in patients can create appointments.'}, status=status.HTTP_401_UNAUTHORIZED)
-
-        # Validate and retrieve the doctor based on the provided doctor_id
-        
-
-        # Validate the appointment date (you can add your own validation logic)
-        appointment_date = request.data.get('appointment_date')
-        if not appointment_date:
-            return Response({'detail': 'Appointment date is required.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            appointment_date = datetime.datetime.strptime(appointment_date, '%Y-%m-%dT%H:%M:%S.%fZ')
-        except ValueError:
-            return Response({'detail': 'Invalid appointment date format. Use ISO 8601 format.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        if appointment_date < datetime.datetime.now():
-            return Response({'detail': 'Appointment date must be in the future.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        # Create the appointment
-        appointment = Appointment(patient=request.user, doctor=doctor, appointment_date=appointment_date)
-        appointment.save()
-
-        # Send an email to the patient with appointment details
-        # You can add your email sending logic here
-
-        subject = 'Appointment Confirmation'
-        message = f'Your appointment with Dr. {doctor.first_name} {doctor.last_name} on {appointment_date} has been scheduled.'
-        from_email = 'rj8077911@gmail.com'  
-        recipient_list = [request.user.email]
-
-        send_mail(subject, message, from_email, recipient_list)
-
-            # Include the patient's email in the response
-        response_data = {
-                'detail': 'Appointment created successfully.',
-                'patient_email': request.user.email,
-            }
-        return Response(response_data, status=status.HTTP_201_CREATED)
-        
 
 
 
@@ -416,3 +331,67 @@ class Mark(APIView):
             return Response({'detail': 'User not found with the provided email.'}, status=status.HTTP_404_NOT_FOUND)
         except Appointment.DoesNotExist:
             return Response({'detail': 'Appointment not found with the provided ID for the current doctor.'}, status=status.HTTP_404_NOT_FOUND)
+
+
+
+
+
+@csrf_exempt
+@require_POST
+def create_appointment(request):
+
+    # Get the doctor_id from the query parameters
+    doctorid = request.GET.get("doctor_id",None)
+    print(doctorid)
+
+    # Check if the provided doctor_id is a valid doctor's id
+    try:
+        doctor = User.objects.get(id=doctorid)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "Invalid id."}, status=400)
+
+    # Ensure that the doctor is a Doctor
+    if doctor.account_type != "Doctor":
+        return JsonResponse({"error": "The specified doctor_id does not correspond to a Doctor."}, status=400)
+
+    # Get patient's email from the request body
+    patient_email = request.GET.get("email",None)
+    
+
+    # Check if the provided email is a valid patient's email
+    try:
+        patient = User.objects.get(email=patient_email)
+        print(patient)
+    except User.DoesNotExist:
+        return JsonResponse({"error": "user does not exist."}, status=400)
+
+    # Check if the patient is a patient
+    if patient.account_type !="Patient":
+        return JsonResponse({"error": "The specified email does not correspond to a Patient."}, status=400)
+
+    # Check if the patient's email is verified using loginmodel table
+    try:
+        login_entry = loginmodel.objects.get(email=patient_email)
+        if not login_entry.isverified:
+            return JsonResponse({"error": "Patient's email is not verified."}, status=400)
+    except loginmodel.DoesNotExist:
+        return JsonResponse({"error": "Patient's email is not found in the loginmodel table."}, status=400)
+ 
+    
+    appointment = Appointment(status="scheduled",doctor_id=doctorid,patient_id=patient.id, appointment_date=timezone.now())
+    appointment.save()
+
+
+    subject = 'Your Appointment Details'
+    message = f'Hello {patient.first_name},\n\nYou have scheduled an appointment with {doctor.first_name} {doctor.last_name} on {appointment.appointment_date}.\n\nAppointment Details:\n- Date and Time: {appointment.appointment_date}\n- Doctor: {doctor.first_name} {doctor.last_name}\n\nPlease arrive on time for your appointment.\n\nThank you!'
+    from_email = '9271rsil@gmail.com'  # Use the email you configured in settings.py
+    recipient_list = [patient.email]
+
+    try:
+        send_mail(subject, message, from_email, recipient_list, fail_silently=False)
+    except Exception as e:
+        return JsonResponse({"error": "Failed to send the appointment confirmation email."}, status=500)
+
+    
+
+    return JsonResponse({"message": "Appointment created successfully."}, status=200)
