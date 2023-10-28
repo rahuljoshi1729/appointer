@@ -1,0 +1,9 @@
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+
+    <script src='https://www.google.com/recaptcha/api.js'></script>
+    <div class="g-recaptcha" data-sitekey="6LdMNNMoAAAAANPxgVPczDvYBxUNUW4peucC6VBN"></div>
+
+    <button type="submit" class="btn btn-primary">Post</button>
+  </form>

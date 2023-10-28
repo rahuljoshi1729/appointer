@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Registration</title>
+</head>
+
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+
+
+
+<body>
+    <h1>User Registration</h1>
+    <form id="registration-form">
+        {% csrf_token %}
+        <input type="email" name="email" placeholder="Email" required><br>
+        <input type="password" name="password" placeholder="Password" required><br>
+        <input type="text" name="first_name" placeholder="First Name" required><br>
+        <input type="text" name="last_name" placeholder="Last Name" required><br>
+        <select name="account_type" required>
+            <option value="Patient">Patient</option>
+            <option value="Doctor">Doctor</option>
+            <option value="Admin">Admin</option>
+        </select><br>
+        <input type="text" name="specialization" placeholder="Specialization"><br>
+        <div class="g-recaptcha" data-sitekey="6LdMNNMoAAAAANPxgVPczDvYBxUNUW4peucC6VBN"></div>
+        <button type="submit">Register</button>
+    </form>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>
+    $(document).ready(function() {
+        $("#registration-form").on("submit", function(event) {
+            event.preventDefault();
+
+            
+            var formData = $(this).serialize();
+
+            // Setting specialization to null if account_type is not Doctor
+            var accountType = $("select[name='account_type']").val();
+            if (accountType !== "Doctor") {
+                formData += "&specialization=";
+            }
+
+            // Adding the reCAPTCHA response and key to the form data
+            var recaptchaResponse = grecaptcha.getResponse();
+            var recaptchaKey = "6LdMNNMoAAAAANPxgVPczDvYBxUNUW4peucC6VBN";  
+
+            // Ensure reCAPTCHA data is included in the request
+            formData += "&recaptcha=" + recaptchaResponse + "&recaptcha_key=" + recaptchaKey;
+
+            // Making an AJAX POST request to the API
+            $.ajax({
+                url: "http://127.0.0.1:8000/api/signup/",  
+                type: "POST",
+                data: formData,
+                dataType: "json",
+                success: function(response) {
+                    alert("Registration successful!");
+                    // Redirect to a thank you page or login page
+                },
+                error: function(response) {
+                    alert("Registration failed. Please try again.");
+                }
+            });
+        });
+    });
+</script>
+
+</body>
+</html>
